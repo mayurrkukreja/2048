@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_games/adservice/admob_services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_swipe_detector/flutter_swipe_detector.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'components/button.dart';
 import 'components/empy_board.dart';
@@ -10,7 +15,12 @@ import 'const/colors.dart';
 import 'managers/board.dart';
 
 class Game extends ConsumerStatefulWidget {
-  const Game({super.key});
+  Game({super.key, this.adSize = AdSize.banner});
+  final AdSize adSize;
+
+  final String adUnitId = Platform.isAndroid
+      ? 'ca-app-pub-5933115352151657/1860078243'
+      : 'ca-app-pub-5933115352151657/1860078243';
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _GameState();
@@ -18,6 +28,9 @@ class Game extends ConsumerStatefulWidget {
 
 class _GameState extends ConsumerState<Game>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  // Ad
+  BannerAd? _bannerAd;
+
   //The contoller used to move the the tiles
   late final AnimationController _moveController = AnimationController(
     duration: const Duration(milliseconds: 100),
@@ -59,6 +72,7 @@ class _GameState extends ConsumerState<Game>
   void initState() {
     //Add an Observer for the Lifecycles of the App
     WidgetsBinding.instance.addObserver(this);
+    _loadAd();
     super.initState();
   }
 
@@ -118,7 +132,7 @@ class _GameState extends ConsumerState<Game>
                               width: 16.0,
                             ),
                             ButtonWidget(
-                              icon: Icons.refresh,
+                              icon: Icons.restart_alt_rounded,
                               onPressed: () {
                                 //Restart the game
                                 ref.read(boardManager.notifier).newGame();
@@ -141,8 +155,15 @@ class _GameState extends ConsumerState<Game>
                       moveAnimation: _moveAnimation,
                       scaleAnimation: _scaleAnimation)
                 ],
-              )
+              ),
             ],
+          ),
+          bottomNavigationBar: SizedBox(
+            height: 69,
+            child: AdWidget(
+              key: UniqueKey(),
+              ad: AdmobService.createBannerAd()..load(),
+            ),
           ),
         ),
       ),
@@ -169,5 +190,34 @@ class _GameState extends ConsumerState<Game>
     _moveController.dispose();
     _scaleController.dispose();
     super.dispose();
+  }
+
+  // Load Google Ads
+  void _loadAd() {
+    final bannerAd = BannerAd(
+      size: widget.adSize,
+      adUnitId: widget.adUnitId,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        // Called when an ad is successfully received.
+        onAdLoaded: (ad) {
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
+          setState(() {
+            _bannerAd = ad as BannerAd;
+          });
+        },
+        // Called when an ad request failed.
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('BannerAd failed to load: $error');
+          ad.dispose();
+        },
+      ),
+    );
+
+    // Start loading.
+    bannerAd.load();
   }
 }
